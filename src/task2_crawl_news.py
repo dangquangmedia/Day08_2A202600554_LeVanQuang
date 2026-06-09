@@ -1,18 +1,6 @@
-"""
-Task 2 — Crawl bài báo về nghệ sĩ liên quan tới ma tuý.
-
-Hướng dẫn:
-    1. Crawl tối thiểu 5 bài báo từ các trang tin tức Việt Nam.
-    2. Sử dụng Crawl4AI hoặc thư viện crawling tương tự.
-    3. Lưu output vào data/landing/news/
-    4. Mỗi bài lưu 1 file JSON với metadata (url, title, date_crawled, content).
-
-Cài đặt:
-    pip install crawl4ai
-"""
-
 import asyncio
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -25,11 +13,11 @@ def setup_directory():
 
 
 ARTICLE_URLS = [
-    "https://vietnamnet.vn/ngoai-nguyen-cong-tri-nhung-nghe-si-nao-tung-bi-bat-vi-ma-tuy-2424971.html",
-    "https://thanhnien.vn/dien-vien-cu-thoc-vua-bi-bat-tung-len-song-vtv-nhu-mot-tam-guong-vuot-kho-185838869.htm",
-    "https://thanhnien.vn/nu-dien-vien-le-hang-bi-bat-vi-di-buon-ma-tuy-185230423181213443.htm",
-    "https://vietnamnet.vn/clip-bat-an-tay-chi-dan-tiktoker-truc-phuong-vi-su-dung-ma-tuy-2342096.html",
-    "https://vietnamnet.vn/hiep-ga-tu-toi-tai-tieng-hon-nhan-on-ao-621979.html",
+    "https://tuoitre.vn/nu-dien-vien-tung-thu-vai-hoai-thatcher-bi-bat-vi-mua-ban-ma-tuy-20230423174834021.htm",
+    "https://thanhnien.vn/dien-vien-hai-tran-huu-tin-lanh-7-nam-6-thang-tu-185230428134549434.htm",
+    "https://vietnamnet.vn/chi-dan-an-tay-truc-phuong-la-nhung-mat-xich-cuoi-trong-duong-day-ma-tuy-2342032.html",
+    "https://tuoitre.vn/nha-thiet-ke-cong-tri-lien-quan-ma-tuy-nguoi-noi-tieng-cung-la-cong-dan-deu-bi-xu-ly-nghiem-20250724192919372.htm",
+    "https://vietnamnet.vn/sao-viet-bi-bat-ngoi-tu-mat-danh-tieng-vi-chat-cam-2513746.html",
 ]
 
 
@@ -37,8 +25,8 @@ def extract_title_from_markdown(markdown: str) -> str:
     """Lấy title từ dòng markdown đầu tiên dạng # Title."""
     for line in markdown.splitlines():
         line = line.strip()
-        if line.startswith("# "):
-            return line.lstrip("#").strip()
+        if line.startswith("#"):
+            return re.sub(r"^#+\s*", "", line).strip()
     return "Unknown"
 
 
@@ -46,13 +34,13 @@ async def crawl_article(url: str) -> dict:
     """
     Crawl một bài báo và trả về dict chứa metadata + content.
 
-    Returns:
-        {
-            "url": str,
-            "title": str,
-            "date_crawled": str (ISO format),
-            "content_markdown": str
-        }
+    Output:
+    {
+        "url": str,
+        "title": str,
+        "date_crawled": str,
+        "content_markdown": str
+    }
     """
     from crawl4ai import AsyncWebCrawler
 
@@ -61,7 +49,14 @@ async def crawl_article(url: str) -> dict:
 
     markdown = getattr(result, "markdown", "") or ""
     metadata = getattr(result, "metadata", {}) or {}
+
     title = metadata.get("title") or extract_title_from_markdown(markdown)
+
+    if len(markdown.strip()) < 500:
+        raise ValueError(
+            f"Crawl content quá ngắn cho URL: {url}. "
+            "Có thể website chặn crawl hoặc chưa load đủ nội dung."
+        )
 
     return {
         "url": url,
@@ -77,22 +72,29 @@ async def crawl_all():
 
     for i, url in enumerate(ARTICLE_URLS, 1):
         print(f"[{i}/{len(ARTICLE_URLS)}] Crawling: {url}")
+
         try:
             article = await crawl_article(url)
-        except Exception as exc:
-            print(f"  ✗ Error: {exc}")
-            continue
 
-        # Lưu file JSON
-        filename = f"article_{i:02d}.json"
-        filepath = DATA_DIR / filename
-        filepath.write_text(json.dumps(article, ensure_ascii=False, indent=2))
-        print(f"  ✓ Saved: {filepath}")
+            filename = f"article_{i:02d}.json"
+            filepath = DATA_DIR / filename
+
+            filepath.write_text(
+                json.dumps(article, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
+
+            print(f"  ✓ Saved: {filepath}")
+
+        except Exception as e:
+            print(f"  ✗ Failed: {url}")
+            print(f"    Error: {e}")
+
+        await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
     if not ARTICLE_URLS:
         print("⚠ Hãy điền ARTICLE_URLS trước khi chạy!")
-        print("Gợi ý: tìm bài báo trên VnExpress, Tuổi Trẻ, Thanh Niên, ...")
     else:
         asyncio.run(crawl_all())
