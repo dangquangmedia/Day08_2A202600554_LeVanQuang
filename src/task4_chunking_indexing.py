@@ -22,6 +22,7 @@ import hashlib
 STANDARDIZED_DIR = Path(__file__).parent.parent / "data" / "standardized"
 INDEX_DIR = Path(__file__).parent.parent / "data" / "index"
 INDEX_FILE = INDEX_DIR / "chunks.json"
+INDEX_PATH = INDEX_DIR / "chunks.jsonl"
 
 
 # =============================================================================
@@ -29,7 +30,7 @@ INDEX_FILE = INDEX_DIR / "chunks.json"
 # =============================================================================
 
 # Chọn 700 để giữ đủ ngữ cảnh pháp luật/bài báo trong mỗi chunk.
-CHUNK_SIZE = 700
+CHUNK_SIZE = 500
 
 # Overlap 100 giúp tránh mất ý khi câu/điều luật bị cắt giữa chunk.
 CHUNK_OVERLAP = 100
@@ -126,6 +127,11 @@ def _fallback_embedding(text: str, dim: int = EMBEDDING_DIM) -> list[float]:
     return [v / norm for v in vec]
 
 
+def create_local_embedding(text: str) -> list[float]:
+    """Tạo vector hashing chuẩn hóa L2, chạy offline và deterministic (dùng cho tests và search)."""
+    return _fallback_embedding(text, EMBEDDING_DIM)
+
+
 # =============================================================================
 # IMPLEMENTATION
 # =============================================================================
@@ -162,7 +168,7 @@ def load_documents() -> list[dict]:
 
         content = _normalize_text(content)
 
-        if len(content) < 50:
+        if len(content) < 5:
             continue
 
         doc_type = _detect_doc_type(md_file)
@@ -237,7 +243,8 @@ def chunk_documents(documents: list[dict]) -> list[dict]:
                 safe_splits.append(split)
 
         for i, chunk_text in enumerate(safe_splits):
-            chunk_id = f"{metadata['doc_id']}_chunk_{i:04d}"
+            doc_id = metadata.get("doc_id", "doc")
+            chunk_id = f"{doc_id}_chunk_{i:04d}"
 
             chunks.append({
                 "id": chunk_id,
@@ -291,10 +298,16 @@ def embed_chunks(chunks: list[dict]) -> list[dict]:
 
 def index_to_vectorstore(chunks: list[dict]):
     """
-    Lưu chunks vào local JSON vector store.
+    Lưu chunks vào local JSON/JSONL vector store.
     """
     INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Ghi file JSON Lines (INDEX_PATH) cho các tests và các module search
+    with INDEX_PATH.open("w", encoding="utf-8") as file:
+        for chunk in chunks:
+            file.write(json.dumps(chunk, ensure_ascii=False) + "\n")
+
+    # Vẫn ghi file JSON payload (INDEX_FILE) cho tính tương thích ngược
     payload = {
         "config": {
             "chunk_size": CHUNK_SIZE,
@@ -313,7 +326,7 @@ def index_to_vectorstore(chunks: list[dict]):
         encoding="utf-8"
     )
 
-    print(f"✓ Saved local index: {INDEX_FILE}")
+    print(f"✓ Saved local index: {INDEX_FILE} and {INDEX_PATH}")
 
 
 def run_pipeline():

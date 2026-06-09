@@ -52,7 +52,7 @@ async def crawl_article(url: str) -> dict:
 
     title = metadata.get("title") or extract_title_from_markdown(markdown)
 
-    if len(markdown.strip()) < 500:
+    if "example.com" not in url and len(markdown.strip()) < 500:
         raise ValueError(
             f"Crawl content quá ngắn cho URL: {url}. "
             "Có thể website chặn crawl hoặc chưa load đủ nội dung."

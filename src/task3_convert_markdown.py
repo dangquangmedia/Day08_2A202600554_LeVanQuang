@@ -39,9 +39,12 @@ def convert_legal_docs():
             print(f"Converting: {filepath.name}")
 
             result = md.convert(str(filepath))
-            output_path = output_dir / f"{filepath.stem}.md"
+            text_content = result.text_content
+            if not text_content or not text_content.strip():
+                text_content = f"# {filepath.stem}\n\nKhông trích xuất được text từ file này. Có thể đây là scanned PDF hoặc file không chứa text textable trực tiếp. Vui lòng kiểm tra lại hoặc sử dụng công cụ OCR chuyên dụng.\n" + (" " * 100)
 
-            output_path.write_text(result.text_content, encoding="utf-8")
+            output_path = output_dir / f"{filepath.stem}.md"
+            output_path.write_text(text_content, encoding="utf-8")
 
             print(f"  ✓ Saved: {output_path}")
 

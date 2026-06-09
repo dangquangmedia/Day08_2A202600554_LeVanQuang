@@ -117,6 +117,17 @@ with col_btn:
 
 # ── Process ───────────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Đang load embedding model & index...")
+def count_unique_documents(sources: list[dict]) -> int:
+    """Count unique source documents from retrieved chunks."""
+    document_names = set()
+    for source in sources:
+        metadata = source.get("metadata", {})
+        title = metadata.get("source") or metadata.get("path")
+        if title:
+            document_names.add(str(title))
+    return len(document_names)
+
+
 def load_pipeline():
     """Load một lần, cache lại."""
     from src.task10_generation import generate_with_citation
